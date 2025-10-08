@@ -1,39 +1,50 @@
 //! A basic example of a preprocessor that does nothing.
 
-use clap::{Arg, ArgMatches, Command};
+use clap::{Parser, Subcommand};
 use mdbook::errors::Result;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
 use mdbook_blox::Nop;
 use semver::{Version, VersionReq};
-
 use std::io;
 use std::process;
 
-fn make_app() -> Command {
-    Command::new("nop-preprocessor")
-        .about("A mdbook preprocessor which does precisely nothing")
-        .subcommand(
-            Command::new("supports")
-                .arg(Arg::new("renderer").required(true))
-                .about("Check whether a renderer is supported by this preprocessor"),
-        )
+/// mdbook preprocessor to add support for admonition-like blocks
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Check whether a renderer is supported by this preprocessor
+    Supports { renderer: String },
 }
 
 fn main() {
-    let matches = make_app().get_matches();
+    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
 
-    // Users will want to construct their own preprocessor here
-    let preprocessor = Nop::new();
-
-    if let Some(sub_args) = matches.subcommand_matches("supports") {
-        handle_supports(&preprocessor, sub_args);
-    } else if let Err(e) = handle_preprocessing(&preprocessor) {
-        eprintln!("{e:?}");
+    let cli = Cli::parse();
+    if let Err(error) = run(cli) {
+        log::error!("Fatal error: {}", error);
+        for error in error.chain() {
+            log::error!("  - {}", error);
+        }
         process::exit(1);
     }
 }
 
-fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
+fn run(cli: Cli) -> Result<()> {
+    match cli.command {
+        None => handle_preprocessing(),
+        Some(Commands::Supports { renderer }) => {
+            handle_supports(renderer);
+        }
+    }
+}
+
+fn handle_preprocessing() -> Result<()> {
     let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
 
     let book_version = Version::parse(&ctx.mdbook_version)?;
@@ -43,26 +54,20 @@ fn handle_preprocessing(pre: &dyn Preprocessor) -> Result<()> {
         eprintln!(
             "Warning: The {} plugin was built against version {} of mdbook, \
              but we're being called from version {}",
-            pre.name(),
+            mdbook_blox::PREPROCESSOR_NAME,
             mdbook::MDBOOK_VERSION,
             ctx.mdbook_version
         );
     }
 
-    let processed_book = pre.run(&ctx, book)?;
+    let processed_book = Nop.run(&ctx, book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
     Ok(())
 }
 
-fn handle_supports(pre: &dyn Preprocessor, sub_args: &ArgMatches) -> ! {
-    let renderer = sub_args
-        .get_one::<String>("renderer")
-        .expect("Required argument");
-    let supported = pre.supports_renderer(renderer);
-
-    // Signal whether the renderer is supported by exiting with 1 or 0.
-    if supported {
+fn handle_supports(renderer: String) -> ! {
+    if Nop.supports_renderer(&renderer) {
         process::exit(0);
     } else {
         process::exit(1);

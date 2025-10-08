@@ -1,0 +1,6 @@
+edition = "2024"
+imports_layout = "Vertical"
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+indent_style = "Block"
+reorder_imports = true

@@ -2,6 +2,9 @@ use mdbook::book::Book;
 use mdbook::errors::Result;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
 
+/// Preprocessor name
+pub const PREPROCESSOR_NAME: &'static str = "blox";
+
 /// A no-op preprocessor.
 pub struct Nop;
 
