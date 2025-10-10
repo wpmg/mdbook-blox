@@ -113,6 +113,18 @@ impl Blox {
 
         self.label().map(|label| format!("{group}-{label}"))
     }
+    #[inline]
+    pub fn number_str(&self, section_number: Option<&str>) -> Option<String> {
+        self.number().map(|n| {
+            let mut s = n.to_string();
+
+            if let Some(sn) = section_number {
+                s.insert_str(0, sn);
+            }
+
+            s
+        })
+    }
 }
 
 #[derive(Deserialize)]

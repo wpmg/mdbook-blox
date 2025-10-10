@@ -6,9 +6,9 @@ mod render;
 
 use crate::config::Config;
 pub use crate::config::PREPROCESSOR_NAME;
-use crate::process::process_section;
+use crate::process::process_book;
 use anyhow::Result;
-use mdbook::book::{Book, BookItem};
+use mdbook::book::Book;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
 
 /// A no-op preprocessor.
@@ -22,21 +22,12 @@ impl BloxProcessor {
 
 impl Preprocessor for BloxProcessor {
     fn name(&self) -> &str {
-        "nop-preprocessor"
+        PREPROCESSOR_NAME
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
         let config = Config::from_context(ctx)?;
-
-        // Store a hashmap with references to change in next step...
-
-        // Loop over sections
-        for item in book.sections.iter_mut() {
-            if let BookItem::Chapter(ref mut chapter) = *item {
-                process_section(chapter, &config)?;
-            }
-        }
-
+        process_book(&mut book, &config)?;
         Ok(book)
     }
 

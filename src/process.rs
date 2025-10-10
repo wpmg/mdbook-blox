@@ -2,9 +2,10 @@ use crate::config::Config;
 use crate::parse::Blox;
 use crate::render::BloxRender;
 use anyhow::{Context, Result};
-use mdbook::book::Chapter;
+use mdbook::book::{Book, BookItem, Chapter};
 use pulldown_cmark::{CodeBlockKind::*, Event, Options, Parser, Tag};
-use std::ops::Range;
+use std::collections::HashMap;
+use std::ops::{Deref, DerefMut, Range};
 
 #[derive(Debug)]
 struct CodeBlockRanges {
@@ -61,8 +62,27 @@ impl CodeBlockRanges {
     }
 }
 
-pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
+pub fn process_book(book: &mut Book, config: &Config) -> Result<()> {
+    let mut number_map = NumberMap::new(config);
+    // Store a hashmap with references to change in next step...
+    // Loop over sections
+    for item in book.sections.iter_mut() {
+        if let BookItem::Chapter(ref mut chapter) = *item {
+            process_section(chapter, &config, &mut number_map)?;
+            number_map.reset(config);
+        }
+    }
+
+    Ok(())
+}
+
+fn process_section(
+    chapter: &mut Chapter,
+    config: &Config,
+    number_map: &mut NumberMap,
+) -> Result<()> {
     log::debug!("Parsing chapter: {}", chapter.name);
+
     let opts = Options::empty();
     // let mut opts = Options::empty();
     // opts.insert(Options::ENABLE_TABLES);
@@ -72,8 +92,6 @@ pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
 
     let events = Parser::new_ext(chapter.content.as_str(), opts);
     let mut blox_list: Vec<(CodeBlockRanges, Blox)> = vec![];
-
-    let mut number: usize = 1;
 
     for (event, span) in events.into_offset_iter() {
         if let Event::Start(Tag::CodeBlock(Fenced(header))) = event.clone() {
@@ -86,9 +104,7 @@ pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
             let ranges =
                 CodeBlockRanges::new_from_block(&chapter.content[span.clone()], span.start)?;
 
-            if blox.set_number(number) {
-                number += 1;
-            }
+            number_map.set_blox(&mut blox)?;
 
             blox_list.push((ranges, blox));
         }
@@ -98,6 +114,7 @@ pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
         return Ok(());
     }
 
+    let section_number: Option<String> = chapter.number.as_ref().map(|n| n.to_string());
     let mut new_content: String =
         String::with_capacity(chapter.content.len() + blox_list.len() * 200);
     let mut index: usize = 0;
@@ -110,6 +127,7 @@ pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
             config,
             blox,
             &chapter.content[ranges.c()],
+            section_number.as_deref(),
         ));
 
         index = ranges.footer.end;
@@ -119,4 +137,48 @@ pub fn process_section(chapter: &mut Chapter, config: &Config) -> Result<()> {
     chapter.content = new_content;
 
     Ok(())
+}
+
+struct NumberMap(HashMap<String, usize>);
+
+impl Deref for NumberMap {
+    type Target = HashMap<String, usize>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for NumberMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl NumberMap {
+    fn new(config: &Config) -> Self {
+        Self(
+            config
+                .environments
+                .iter()
+                .map(|(env, _)| (env.clone(), 1))
+                .collect(),
+        )
+    }
+    fn reset(&mut self, config: &Config) {
+        self.iter_mut()
+            .filter(|(k, _)| config.prefix_number(k))
+            .for_each(|(_, v)| *v = 0);
+    }
+    fn set_blox(&mut self, blox: &mut Blox) -> Result<()> {
+        let n = self
+            .get_mut(blox.env())
+            .context("Couldn't find environment")?;
+
+        if blox.set_number(*n) {
+            *n += 1;
+        }
+
+        Ok(())
+    }
 }

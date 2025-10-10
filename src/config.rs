@@ -78,6 +78,12 @@ impl Config {
             .and_then(|b| b.color.as_ref())
             .unwrap_or(&self.defaults.color)
     }
+    pub fn prefix_number(&self, key: &str) -> bool {
+        self.environments
+            .get(key)
+            .and_then(|b| b.prefix_number)
+            .unwrap_or(self.defaults.prefix_number)
+    }
     #[inline]
     pub fn hide_name(&self, key: &str) -> bool {
         self.environments
@@ -115,6 +121,7 @@ impl Default for Config {
 #[serde(default)]
 pub struct ConfigDefaults {
     color: HexColor,
+    prefix_number: bool,
     // BloxOptions
     hide_name: bool,
     hide_header: bool,
@@ -125,6 +132,7 @@ impl Default for ConfigDefaults {
     fn default() -> Self {
         Self {
             color: HexColor::from_u24(0xCE0037), // SLU Red
+            prefix_number: true,
             hide_name: false,
             hide_header: false,
             numbered: true,
@@ -137,6 +145,7 @@ impl Default for ConfigDefaults {
 pub struct EnvironmentConfig {
     name: String,
     color: Option<HexColor>,
+    prefix_number: Option<bool>,
     // BloxOptions
     hide_name: Option<bool>,
     hide_header: Option<bool>,
@@ -148,6 +157,7 @@ impl Default for EnvironmentConfig {
         Self {
             name: "ENVIRONMENT UNDEFINED".to_string(),
             color: None,
+            prefix_number: None,
             // BloxOptions
             hide_name: None,
             hide_header: None,
@@ -208,6 +218,7 @@ exercise = {name = "Exercise"}
             EnvironmentConfig {
                 name: "Alert".to_string(),
                 color: Some(HexColor::from_u24(0x00FF00)),
+                prefix_number: None,
                 hide_name: None,
                 hide_header: None,
                 numbered: Some(false),
@@ -218,6 +229,7 @@ exercise = {name = "Exercise"}
             EnvironmentConfig {
                 name: "Exercise".to_string(),
                 color: None,
+                prefix_number: None,
                 hide_name: None,
                 hide_header: None,
                 numbered: None,

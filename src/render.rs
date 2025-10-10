@@ -6,7 +6,7 @@ pub struct BloxRender;
 
 impl BloxRender {
     // Returns None if header should be hidden
-    fn header(config: &Config, blox: &Blox) -> Option<String> {
+    fn header(config: &Config, blox: &Blox, section_number: Option<&str>) -> Option<String> {
         if blox.hide_header(config) {
             return None;
         }
@@ -19,8 +19,8 @@ impl BloxRender {
             }
         }
 
-        if let Some(n) = blox.number() {
-            pfx_title.push(n.to_string());
+        if let Some(n) = blox.number_str(section_number) {
+            pfx_title.push(n);
         }
 
         // Implicit hide_header if name is hidden, numbering is removed and no title is provided
@@ -37,11 +37,16 @@ impl BloxRender {
         Some(header)
     }
 
-    pub fn html(config: &Config, blox: &Blox, content: &str) -> String {
+    pub fn html(
+        config: &Config,
+        blox: &Blox,
+        content: &str,
+        section_number: Option<&str>,
+    ) -> String {
         let block_class = BloxCss::block_class();
         let content_class = BloxCss::content_class();
 
-        let header = Self::header(config, blox)
+        let header = Self::header(config, blox, section_number)
             .map(|h| {
                 format!(
                     r#"<div class="{header_class}">{h}</div>"#,
@@ -81,7 +86,7 @@ mod test {
 
     fn check_html(blox: Blox, expected: &str) -> Result<()> {
         let config = default_test_config();
-        let html = BloxRender::html(&config, &blox, "");
+        let html = BloxRender::html(&config, &blox, "", None);
 
         assert_eq!(html, expected.to_string());
         Ok(())

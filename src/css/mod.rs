@@ -26,7 +26,8 @@ impl BloxCss {
             r####"
 .{block_class} {{
   display: flow-root;
-  margin: 1em 0;
+  margin-block: 1em;
+  margin-inline: 0em;
   box-shadow: 0 0.2rem 1rem rgba(0, 0, 0, 0.05);
   border-inline-start-width: 0.4em;
   border-inline-start-style: solid;
@@ -40,10 +41,12 @@ impl BloxCss {
   padding-block: 0.5em;
 }}
 .{block_class} > .{content_class} {{
+  margin-block: 1em;
 }}
 .{block_class} > .{footer_class} {{
   font-style: italic;
   text-align: right;
+  margin-block: 1em;
 }}
 @media print {{
   .{block_class} {{
