@@ -1,11 +1,14 @@
 //! A basic example of a preprocessor that does nothing.
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use mdbook::errors::Result;
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
-use mdbook_blox::Nop;
+use mdbook_blox::BloxProcessor;
+use mdbook_blox::config::Config;
 use semver::{Version, VersionReq};
+use std::fs;
 use std::io;
+use std::path::PathBuf;
 use std::process;
 
 /// mdbook preprocessor to add support for admonition-like blocks
@@ -20,6 +23,11 @@ struct Cli {
 enum Commands {
     /// Check whether a renderer is supported by this preprocessor
     Supports { renderer: String },
+    /// Generate css
+    Css {
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -41,10 +49,12 @@ fn run(cli: Cli) -> Result<()> {
         Some(Commands::Supports { renderer }) => {
             handle_supports(renderer);
         }
+        Some(Commands::Css { dir }) => handle_css(dir.unwrap_or_else(|| PathBuf::from("."))),
     }
 }
 
 fn handle_preprocessing() -> Result<()> {
+    log::debug!("Start preprocessing blox");
     let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
 
     let book_version = Version::parse(&ctx.mdbook_version)?;
@@ -52,7 +62,7 @@ fn handle_preprocessing() -> Result<()> {
 
     if !version_req.matches(&book_version) {
         eprintln!(
-            "Warning: The {} plugin was built against version {} of mdbook, \
+            "Warning: The {} plugin was built against version {} of mdbook,\
              but we're being called from version {}",
             mdbook_blox::PREPROCESSOR_NAME,
             mdbook::MDBOOK_VERSION,
@@ -60,16 +70,30 @@ fn handle_preprocessing() -> Result<()> {
         );
     }
 
-    let processed_book = Nop.run(&ctx, book)?;
+    let processed_book = BloxProcessor.run(&ctx, book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
     Ok(())
 }
 
 fn handle_supports(renderer: String) -> ! {
-    if Nop.supports_renderer(&renderer) {
+    if BloxProcessor.supports_renderer(&renderer) {
         process::exit(0);
     } else {
         process::exit(1);
     }
+}
+
+fn handle_css(dir: PathBuf) -> anyhow::Result<()> {
+    let book_toml = dir.join("book.toml");
+    log::info!("Reading configuration file '{}'", book_toml.display());
+
+    let config = Config::from_file(&book_toml)?;
+    let css = mdbook_blox::css::css_from_config(&config)?;
+
+    let output = dir.join(config.css);
+    log::info!("Writing custom CSS file '{}'", output.display());
+    fs::write(output, css)?;
+
+    Ok(())
 }
