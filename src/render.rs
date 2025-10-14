@@ -3,50 +3,20 @@ use crate::css::BloxCss;
 use crate::parse::Blox;
 
 pub struct BloxRender;
-
 impl BloxRender {
     // Returns None if header should be hidden
-    fn header(config: &Config, blox: &Blox, section_number: Option<&str>) -> Option<String> {
-        if blox.hide_header(config) {
-            return None;
+    fn header(config: &Config, blox: &Blox) -> Option<String> {
+        match blox.hide_header() {
+            true => None,
+            false => blox.title_full(config),
         }
-
-        let mut pfx_title: Vec<String> = vec![];
-
-        if !blox.hide_name(config) {
-            if let Ok(name) = config.name(blox.env()) {
-                pfx_title.push(name.to_string());
-            }
-        }
-
-        if let Some(n) = blox.number_str(section_number) {
-            pfx_title.push(n);
-        }
-
-        // Implicit hide_header if name is hidden, numbering is removed and no title is provided
-        if pfx_title.is_empty() {
-            return blox.title().map(|s| s.to_string());
-        }
-
-        let mut header: String = pfx_title.join(" ");
-
-        if let Some(title) = blox.title() {
-            header.push_str(&format!(": {title}"));
-        }
-
-        Some(header)
     }
 
-    pub fn html(
-        config: &Config,
-        blox: &Blox,
-        content: &str,
-        section_number: Option<&str>,
-    ) -> String {
+    pub fn html(config: &Config, blox: &Blox) -> String {
         let block_class = BloxCss::block_class();
         let content_class = BloxCss::content_class();
 
-        let header = Self::header(config, blox, section_number)
+        let header = Self::header(config, blox)
             .map(|h| {
                 format!(
                     r#"<div class="{header_class}">{h}</div>"#,
@@ -68,10 +38,8 @@ impl BloxRender {
         let group_str = config.group_str(blox.env()).unwrap();
 
         format!(
-            r####"<div id="{id}" class="{block_class} {group_str}">{header}<div class="{content_class}">
-{content}
-</div>{footer}</div>
-"####
+            r####"<div id="{id}" class="{block_class} {group_str}">{header}<div class="{content_class}">{content}</div>{footer}</div>"####,
+            content = blox.content
         )
     }
 }
@@ -80,13 +48,13 @@ impl BloxRender {
 mod test {
     use super::*;
     use crate::config::test::default_test_config;
-    use crate::parse::{Blox, BloxOptions};
+    use crate::parse::Blox;
     use anyhow::Result;
     use pretty_assertions::assert_eq;
 
     fn check_html(blox: Blox, expected: &str) -> Result<()> {
         let config = default_test_config();
-        let html = BloxRender::html(&config, &blox, "", None);
+        let html = BloxRender::html(&config, &blox);
 
         assert_eq!(html, expected.to_string());
         Ok(())
@@ -95,60 +63,30 @@ mod test {
     #[test]
     fn test_html() -> Result<()> {
         check_html(
-            Blox::new(
-                "alert",
-                BloxOptions {
-                    title: None,
-                    footer: None,
-                    label: None,
-                    defer_rendering: false,
-                    hide_name: None,
-                    hide_header: None,
-                    number: None,
-                },
-            ),
-            r#"<div id="" class="blox blox-alert"><div class="blox-header">Alert</div><div class="blox-content">
-
-</div></div>
-"#,
+            {
+                let blox = Blox::new("alert");
+                blox
+            },
+            r#"<div id="" class="blox blox-alert"><div class="blox-header">Alert</div><div class="blox-content"></div></div>"#,
         )?;
 
         check_html(
-            Blox::new(
-                "exercise",
-                BloxOptions {
-                    title: None,
-                    footer: None,
-                    label: None,
-                    defer_rendering: false,
-                    hide_name: None,
-                    hide_header: None,
-                    number: Some(10),
-                },
-            ),
-            r#"<div id="" class="blox blox-exercise"><div class="blox-header">Exercise 10</div><div class="blox-content">
-
-</div></div>
-"#,
+            {
+                let mut blox = Blox::new("exercise");
+                blox.number = Some("10".to_string());
+                blox
+            },
+            r#"<div id="" class="blox blox-exercise"><div class="blox-header">Exercise 10</div><div class="blox-content"></div></div>"#,
         )?;
 
         check_html(
-            Blox::new(
-                "alert",
-                BloxOptions {
-                    title: None,
-                    footer: None,
-                    label: Some("warning-22".to_string()),
-                    defer_rendering: false,
-                    hide_name: None,
-                    hide_header: None,
-                    number: Some(10),
-                },
-            ),
-            r#"<div id="blox-alert-warning-22" class="blox blox-alert"><div class="blox-header">Alert 10</div><div class="blox-content">
-
-</div></div>
-"#,
+            {
+                let mut blox = Blox::new("alert");
+                blox.number = Some("10".to_string());
+                blox.label = Some("warning-22".to_string());
+                blox
+            },
+            r#"<div id="blox-alert-warning-22" class="blox blox-alert"><div class="blox-header">Alert 10</div><div class="blox-content"></div></div>"#,
         )?;
 
         Ok(())

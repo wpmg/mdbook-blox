@@ -3,7 +3,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
-use mdbook_blox::BloxProcessor;
+use mdbook_blox::BloxPreProcessor;
 use mdbook_blox::config::Config;
 use semver::{Version, VersionReq};
 use std::fs;
@@ -70,14 +70,14 @@ fn handle_preprocessing() -> Result<()> {
         );
     }
 
-    let processed_book = BloxProcessor.run(&ctx, book)?;
+    let processed_book = BloxPreProcessor.run(&ctx, book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
 
     Ok(())
 }
 
 fn handle_supports(renderer: String) -> ! {
-    if BloxProcessor.supports_renderer(&renderer) {
+    if BloxPreProcessor.supports_renderer(&renderer) {
         process::exit(0);
     } else {
         process::exit(1);

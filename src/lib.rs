@@ -6,28 +6,35 @@ mod render;
 
 use crate::config::Config;
 pub use crate::config::PREPROCESSOR_NAME;
-use crate::process::process_book;
 use anyhow::Result;
 use mdbook::book::Book;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
+use process::{BloxProcessor, book_filter_iter_mut};
 
 /// A no-op preprocessor.
-pub struct BloxProcessor;
+pub struct BloxPreProcessor;
 
-impl BloxProcessor {
+impl BloxPreProcessor {
     pub fn new() -> Self {
         Self
     }
 }
 
-impl Preprocessor for BloxProcessor {
+impl Preprocessor for BloxPreProcessor {
     fn name(&self) -> &str {
         PREPROCESSOR_NAME
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
         let config = Config::from_context(ctx)?;
-        process_book(&mut book, &config)?;
+        let mut new_content = BloxProcessor::process(&mut book, &config)?;
+        for (sec_id, chapter) in book_filter_iter_mut(&mut book) {
+            let Some(content) = new_content.remove(&sec_id) else {
+                continue;
+            };
+            chapter.content = content;
+        }
+
         Ok(book)
     }
 

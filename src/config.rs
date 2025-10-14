@@ -60,49 +60,50 @@ impl Config {
         self.environments.contains_key(key)
     }
     #[inline]
+    fn get(&self, key: &str) -> Option<&EnvironmentConfig> {
+        self.environments.get(key).or_else(|| {
+            log::error!("Environment not found: {key}");
+            None
+        })
+    }
+    #[inline]
     pub fn group_str(&self, key: &str) -> Result<String> {
         anyhow::ensure!(self.has_environment(key), "Environment does not exist");
         Ok(format!("{CODE_BLOCK_KEYWORD}-{key}"))
     }
     #[inline]
-    pub fn name(&self, key: &str) -> Result<&str> {
-        self.environments
-            .get(key)
-            .map(|b| b.name.as_str())
-            .context("Environmet does not exist")
+    pub fn name(&self, key: &str) -> &str {
+        self.get(key)
+            .map(|e| e.name.as_str())
+            .unwrap_or("ENVIRONMENT")
     }
     #[inline]
     pub fn color(&self, key: &str) -> &HexColor {
-        self.environments
-            .get(key)
-            .and_then(|b| b.color.as_ref())
+        self.get(key)
+            .and_then(|e| e.color.as_ref())
             .unwrap_or(&self.defaults.color)
     }
     pub fn prefix_number(&self, key: &str) -> bool {
-        self.environments
-            .get(key)
-            .and_then(|b| b.prefix_number)
+        self.get(key)
+            .and_then(|e| e.prefix_number)
             .unwrap_or(self.defaults.prefix_number)
     }
     #[inline]
     pub fn hide_name(&self, key: &str) -> bool {
-        self.environments
-            .get(key)
-            .and_then(|b| b.hide_name)
+        self.get(key)
+            .and_then(|e| e.hide_name)
             .unwrap_or(self.defaults.hide_name)
     }
     #[inline]
     pub fn hide_header(&self, key: &str) -> bool {
-        self.environments
-            .get(key)
-            .and_then(|b| b.hide_name)
+        self.get(key)
+            .and_then(|e| e.hide_name)
             .unwrap_or(self.defaults.hide_header)
     }
     #[inline]
     pub fn numbered(&self, key: &str) -> bool {
-        self.environments
-            .get(key)
-            .and_then(|b| b.numbered)
+        self.get(key)
+            .and_then(|e| e.numbered)
             .unwrap_or(self.defaults.numbered)
     }
 }
@@ -247,10 +248,10 @@ exercise = {name = "Exercise"}
         assert_eq!(config, expected);
 
         // Check block
-        assert_eq!(config.name("alert").unwrap(), "Alert");
+        assert_eq!(config.name("alert"), "Alert");
         assert_eq!(*config.color("alert"), HexColor::from_u24(0x00FF00));
         assert_eq!(config.numbered("alert"), false);
-        assert_eq!(config.name("exercise").unwrap(), "Exercise");
+        assert_eq!(config.name("exercise"), "Exercise");
         assert_eq!(*config.color("exercise"), HexColor::from_u24(0xFF0000));
         assert_eq!(config.numbered("exercise"), true);
 
