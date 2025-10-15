@@ -37,16 +37,19 @@ impl BloxCss {
   padding-inline: 1em;
 }}
 .{block_class} > .{header_class} {{
+  display: flow-root;
   font-weight: bold;
-  padding-block: 0.5em;
 }}
 .{block_class} > .{content_class} {{
   margin-block: 1em;
 }}
 .{block_class} > .{footer_class} {{
+  display: flow-root;
   font-style: italic;
   text-align: right;
-  margin-block: 1em;
+}}
+.{block_class} > .{header_class} > p, .{block_class} > .{footer_class} > p {{
+  margin-block: 0.6em;
 }}
 @media print {{
   .{block_class} {{

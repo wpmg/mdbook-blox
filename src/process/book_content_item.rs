@@ -41,7 +41,6 @@ impl<'a> BookContentItem<'a> {
                     .get(*id)
                     .map(|b| Cow::Owned(BloxRender::html(config, b)))
                     .unwrap_or_default();
-                log::warn!("{}", s);
                 s
             }
             Self::LabelledBlox(label) => label_list

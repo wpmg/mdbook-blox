@@ -124,11 +124,14 @@ impl<'a> Blox<'a> {
         Some(format!("{env_name} {num}"))
     }
     #[inline]
-    pub fn title_full(&self, config: &Config) -> Option<String> {
-        if self.hide_name {
-            return self.title().map(|s| s.to_owned());
-        }
-
+    pub fn title_env(&self, config: &Config) -> Option<String> {
+        let title = self.title()?;
+        let mut s = config.name(self.env()).to_string();
+        s.push_str(&format!(": {title}"));
+        Some(s)
+    }
+    #[inline]
+    pub fn title_full(&self, config: &Config) -> String {
         let mut s = config.name(self.env()).to_string();
 
         if let Some(n) = self.number() {
@@ -139,7 +142,15 @@ impl<'a> Blox<'a> {
             s.push_str(&format!(": {title}"));
         }
 
-        Some(s)
+        s
+    }
+    #[inline]
+    pub fn title_auto(&self, config: &Config) -> Option<String> {
+        if self.hide_name {
+            return self.title().map(|s| s.to_owned());
+        }
+
+        Some(self.title_full(config))
     }
     #[inline]
     pub fn footer(&self) -> Option<&str> {
@@ -248,10 +259,10 @@ struct CodeBlockOptions {
 
 impl CodeBlockOptions {
     fn from_string(options: &str) -> Result<Self> {
-        let inline_toml = format!("options = {{ {} }}", options);
+        let inline_toml = format!("options = {{ {options} }}");
         let cb_opts: CodeBlockOptions =
             toml::from_str::<CodeBlockOptionsWrapper>(inline_toml.as_str())
-                .context("Failed to parse blox options")?
+                .with_context(|| format!("Failed to parse blox options: {options}"))?
                 .options;
 
         Ok(cb_opts)
@@ -298,7 +309,7 @@ mod test {
     }
 
     #[test]
-    fn test() -> Result<()> {
+    fn test_construction() -> Result<()> {
         check_options(
             "blox alert",
             Some({
@@ -331,6 +342,21 @@ mod test {
 
         check_options("bloxx alert", None)?;
         check_options("block alert", None)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_method() -> Result<()> {
+        let config = default_test_config();
+
+        let mut blox = Blox::new("alert");
+        blox.title = Some("Title".to_string());
+
+        assert_eq!(blox.title_auto(&config).as_deref(), Some("Alert: Title"));
+
+        blox.hide_name = true;
+        assert_eq!(blox.title_auto(&config).as_deref(), Some("Title"));
 
         Ok(())
     }

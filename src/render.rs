@@ -8,7 +8,7 @@ impl BloxRender {
     fn header(config: &Config, blox: &Blox) -> Option<String> {
         match blox.hide_header() {
             true => None,
-            false => blox.title_full(config),
+            false => blox.title_auto(config),
         }
     }
 
@@ -19,7 +19,11 @@ impl BloxRender {
         let header = Self::header(config, blox)
             .map(|h| {
                 format!(
-                    r#"<div class="{header_class}">{h}</div>"#,
+                    r#"<div class="{header_class}">
+
+{h}
+
+</div>"#,
                     header_class = BloxCss::header_class()
                 )
             })
@@ -28,19 +32,36 @@ impl BloxRender {
             .footer()
             .map(|f| {
                 format!(
-                    r#"<div class="{footer_class}">{f}</div>"#,
+                    r#"<div class="{footer_class}">
+
+{f}
+
+</div>"#,
                     footer_class = BloxCss::footer_class()
                 )
             })
             .unwrap_or_default();
 
-        let id: String = blox.id_str(config).unwrap_or("".to_string());
+        let content = if blox.content.trim().is_empty() {
+            String::new()
+        } else {
+            format!(
+                r##"<div class="{content_class}">
+
+{}
+
+</div>"##,
+                blox.content
+            )
+        };
+
+        let id: String = blox
+            .id_str(config)
+            .map(|id| format!(r#" id="{id}""#))
+            .unwrap_or("".to_string());
         let group_str = config.group_str(blox.env()).unwrap();
 
-        format!(
-            r####"<div id="{id}" class="{block_class} {group_str}">{header}<div class="{content_class}">{content}</div>{footer}</div>"####,
-            content = blox.content
-        )
+        format!(r##"<div{id} class="{block_class} {group_str}">{header}{content}{footer}</div>"##)
     }
 }
 
@@ -67,7 +88,11 @@ mod test {
                 let blox = Blox::new("alert");
                 blox
             },
-            r#"<div id="" class="blox blox-alert"><div class="blox-header">Alert</div><div class="blox-content"></div></div>"#,
+            r#"<div class="blox blox-alert"><div class="blox-header">
+
+Alert
+
+</div></div>"#,
         )?;
 
         check_html(
@@ -76,7 +101,11 @@ mod test {
                 blox.number = Some("10".to_string());
                 blox
             },
-            r#"<div id="" class="blox blox-exercise"><div class="blox-header">Exercise 10</div><div class="blox-content"></div></div>"#,
+            r#"<div class="blox blox-exercise"><div class="blox-header">
+
+Exercise 10
+
+</div></div>"#,
         )?;
 
         check_html(
@@ -86,7 +115,25 @@ mod test {
                 blox.label = Some("warning-22".to_string());
                 blox
             },
-            r#"<div id="blox-alert-warning-22" class="blox blox-alert"><div class="blox-header">Alert 10</div><div class="blox-content"></div></div>"#,
+            r#"<div id="blox-alert-warning-22" class="blox blox-alert"><div class="blox-header">
+
+Alert 10
+
+</div></div>"#,
+        )?;
+
+        check_html(
+            {
+                let mut blox = Blox::new("alert");
+                blox.title = Some("Title".to_string());
+                blox.hide_name = true;
+                blox
+            },
+            r#"<div class="blox blox-alert"><div class="blox-header">
+
+Title
+
+</div></div>"#,
         )?;
 
         Ok(())

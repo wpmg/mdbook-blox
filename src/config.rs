@@ -97,7 +97,7 @@ impl Config {
     #[inline]
     pub fn hide_header(&self, key: &str) -> bool {
         self.get(key)
-            .and_then(|e| e.hide_name)
+            .and_then(|e| e.hide_header)
             .unwrap_or(self.defaults.hide_header)
     }
     #[inline]
@@ -209,6 +209,7 @@ numbered = true
 [environments]
 alert = {name = "Alert", color = "#00FF00", numbered = false}
 exercise = {name = "Exercise"}
+quote = {name = "Quote", color = "#CCCCCC", numbered = false, hide_name = true}
 "##;
 
     pub fn default_test_config() -> Config {
@@ -236,6 +237,17 @@ exercise = {name = "Exercise"}
                 numbered: None,
             },
         );
+        config.environments.insert(
+            "quote".to_string(),
+            EnvironmentConfig {
+                name: "Quote".to_string(),
+                color: Some(HexColor::from_u24(0xCCCCCC)),
+                prefix_number: None,
+                hide_name: Some(true),
+                hide_header: None,
+                numbered: Some(false),
+            },
+        );
 
         config
     }
@@ -254,6 +266,11 @@ exercise = {name = "Exercise"}
         assert_eq!(config.name("exercise"), "Exercise");
         assert_eq!(*config.color("exercise"), HexColor::from_u24(0xFF0000));
         assert_eq!(config.numbered("exercise"), true);
+        assert_eq!(config.name("quote"), "Quote");
+        assert_eq!(*config.color("quote"), HexColor::from_u24(0xCCCCCC));
+        assert_eq!(config.numbered("quote"), false);
+        assert_eq!(config.hide_header("quote"), false);
+        assert_eq!(config.hide_name("quote"), true);
 
         Ok(())
     }

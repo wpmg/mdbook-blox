@@ -143,11 +143,8 @@ impl<'a> BloxProcessor<'a> {
             last = span.end;
         }
 
-        log::warn!("{:?}", items);
-        log::warn!("{:?}", other_items);
         items.append(&mut other_items);
         items.sort_by(|a, b| a.0.start.cmp(&b.0.start));
-        log::warn!("{:?}", items);
 
         let items: Vec<BookContentItem> = items
             .into_iter()
@@ -213,44 +210,80 @@ impl<'a> BloxProcessor<'a> {
 
     fn replace_refs(&self, content: String, chapter: &Chapter) -> Result<String> {
         // Can match "ref" here with, say, "tref" or similar, if multiple ref types is wanted
-        let regex_pattern =
-            r#"\{\{[[:space:]]*blox-ref:[[:space:]]*(?P<label>[[:alnum:]_-]+)[[:space:]]*\}\}"#;
+        let regex_pattern = r#"\{\{[[:space:]]*blox-(?P<ref>[ltnfTN]?ref):[[:space:]]*(?P<label>[[:alnum:]_-]+)[[:space:]]*\}\}"#;
         let regex = Regex::new(regex_pattern).context("Could not create regex")?;
 
         let new_content = regex
             .replace_all(&content, |caps: &Captures| {
                 let Some(label) = caps.name("label").map(|l| l.as_str()) else {
-                    log::error!("Regex match error");
-                    return format!(r#"**[??blox-ref error]**"#);
+                    return replace_refs_error("Regex match error", "ref", "error");
+                };
+                let Some(ref_type) = caps.name("ref").map(|r| r.as_str()) else {
+                    return replace_refs_error("Unknown blox ref", "ref", label);
                 };
 
                 let Some(blox) = self.labelled_blox.get(label) else {
-                    log::warn!("Unknown blox reference: {label}");
-                    return format!(r#"**[??blox-ref: {label}]**"#);
+                    return replace_refs_error("Unknown blox ref", ref_type, label);
                 };
 
-                let Some(path) = chapter.path.as_ref().and_then(|p| blox.rel_path(p)) else {
-                    log::warn!("Failed to get path to blox reference: {label}");
-                    return format!(r#"**[??blox-ref: {label}]**"#);
+                let Some(mut path) = chapter.path.as_ref().and_then(|p| blox.rel_path(p)) else {
+                    return replace_refs_error("Failed to get path to blox", ref_type, label);
                 };
 
-                let id_str: String = blox
-                    .id_str(self.config)
-                    .map(|s| format!("#{s}"))
-                    .unwrap_or_default();
+                path.push_str(
+                    &blox
+                        .id_str(self.config)
+                        .map(|s| format!("#{s}"))
+                        .unwrap_or_default(),
+                );
 
-                let Some(text) = blox
-                    .title_numbered(self.config)
-                    .or_else(|| blox.title_full(self.config))
-                else {
-                    log::warn!("Failed to parse title for blox reference: {label}");
-                    return format!(r#"**[??blox-ref: {label}]**"#);
-                };
-
-                format!(r#"[{text}]({path}{id_str})"#)
+                match ref_type {
+                    // Give title
+                    "Tref" => blox.title().map(|s| s.to_string()).unwrap_or_else(|| {
+                        replace_refs_error("Blox does not have a title", ref_type, label)
+                    }),
+                    // Give number
+                    "Nref" => blox.number().map(|s| s.to_string()).unwrap_or_else(|| {
+                        replace_refs_error("Blox does not have a number", ref_type, label)
+                    }),
+                    // Give link
+                    "lref" => path,
+                    // Provide linked environment-title
+                    "tref" => blox
+                        .title_env(self.config)
+                        .map(|s| markdown_link(&s, &path))
+                        .unwrap_or_else(|| {
+                            replace_refs_error("Blox does not have a title", ref_type, label)
+                        }),
+                    // Provide linked environment-number
+                    "nref" => blox
+                        .title_numbered(self.config)
+                        .map(|s| markdown_link(&s, &path))
+                        .unwrap_or_else(|| {
+                            replace_refs_error("Blox does not have a number", ref_type, label)
+                        }),
+                    // Provide linked environment-number-title
+                    "fref" => markdown_link(&blox.title_full(self.config), &path),
+                    // Provide environment-number, or environment-title if no number
+                    _ => blox
+                        .title_auto(self.config)
+                        .map(|s| markdown_link(&s, &path))
+                        .unwrap_or_else(|| {
+                            replace_refs_error("Blox does not have a title", ref_type, label)
+                        }),
+                }
             })
             .to_string();
 
         Ok(new_content)
     }
+}
+
+fn replace_refs_error(label: &str, ref_type: &str, err: &str) -> String {
+    log::warn!("{err}: {label}");
+    format!("**[??blox-{ref_type}: {label}??]**")
+}
+
+fn markdown_link(text: &str, link: &str) -> String {
+    format!("[{text}]({link})")
 }
