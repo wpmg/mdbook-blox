@@ -1,11 +1,11 @@
+pub mod blox;
 pub mod config;
-pub mod css;
 mod parse;
 mod process;
 mod render;
 
-use crate::config::Config;
 pub use crate::config::PREPROCESSOR_NAME;
+pub use crate::config::processor_config::Config;
 use anyhow::Result;
 use mdbook::book::Book;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
@@ -28,6 +28,7 @@ impl Preprocessor for BloxPreProcessor {
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
         let config = Config::from_context(ctx)?;
         let mut new_content = BloxProcessor::process(&mut book, &config)?;
+
         for (sec_id, chapter) in book_filter_iter_mut(&mut book) {
             let Some(content) = new_content.remove(&sec_id) else {
                 continue;

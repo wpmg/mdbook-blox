@@ -1,10 +1,9 @@
-//! A basic example of a preprocessor that does nothing.
+//! A preprocessor that handles blox
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
-use mdbook_blox::BloxPreProcessor;
-use mdbook_blox::config::Config;
+use mdbook_blox::{BloxPreProcessor, Config};
 use semver::{Version, VersionReq};
 use std::fs;
 use std::io;
@@ -89,9 +88,9 @@ fn handle_css(dir: PathBuf) -> anyhow::Result<()> {
     log::info!("Reading configuration file '{}'", book_toml.display());
 
     let config = Config::from_file(&book_toml)?;
-    let css = mdbook_blox::css::css_from_config(&config)?;
+    let css = config.css().css_string(&config);
 
-    let output = dir.join(config.css);
+    let output = dir.join(config.css().file());
     log::info!("Writing custom CSS file '{}'", output.display());
     fs::write(output, css)?;
 
