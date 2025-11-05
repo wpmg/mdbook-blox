@@ -77,7 +77,8 @@ impl CssConfig {
   margin-block: 1em;
 }}
 .{figure} > img {{
-
+  display: block;
+  margin: auto;
 }}
 .{figure} > figcaption {{
 
