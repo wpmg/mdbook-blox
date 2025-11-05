@@ -181,7 +181,9 @@ impl<'a> BloxCollection<'a> {
         number_map: &mut NumberMap,
         path: Option<&PathBuf>,
     ) -> Result<()> {
-        let blox = self.get_mut(id).context("Could not find blox")?;
+        let blox = self
+            .get_mut(id)
+            .context(format!("Could not find blox: {}", id))?;
         blox.set_number(|env| number_map.next_string(env))?;
         blox.set_path(path);
         Ok(())

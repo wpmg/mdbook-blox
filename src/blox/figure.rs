@@ -10,15 +10,30 @@ use super::leaf::Leaf;
 
 // Figure: only to store labelled figures for ref. matching.
 // Numbering as-we-go on parse.
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Figure {
     src: String,
     label: String,
     alt: String,
+    width: Option<f64>,
 
     content: String,
     path: PathBuf,
     number: Option<String>,
+}
+
+impl Default for Figure {
+    fn default() -> Self {
+        Self {
+            src: String::default(),
+            label: String::default(),
+            alt: String::default(),
+            width: None,
+            content: String::default(),
+            path: PathBuf::default(),
+            number: None,
+        }
+    }
 }
 
 impl Figure {
@@ -34,6 +49,10 @@ impl Figure {
     #[inline]
     pub fn alt(&self) -> &str {
         self.alt.as_str()
+    }
+    #[inline]
+    pub fn width(&self) -> Option<&f64> {
+        self.width.as_ref()
     }
     #[inline]
     pub fn content(&self) -> &str {
@@ -149,8 +168,13 @@ impl Render for Figure {
             .then(|| format!(r#"alt="{alt}""#, alt = self.alt()))
             .unwrap_or_default();
 
+        let width = self
+            .width()
+            .map(|w| format!(r#"style="width: {width}%""#, width = w.max(1.0) * 100.0))
+            .unwrap_or_default();
+
         format!(
-            r##"<figure {id} class="{figure_class}"><img src="{src}" {alt} />{caption}</figure>
+            r##"<figure {id} class="{figure_class}"><img src="{src}" {alt} {width} />{caption}</figure>
 "##,
             figure_class = config.css().figure(),
             src = self.src(),
@@ -173,8 +197,13 @@ impl Render for Figure {
             })
             .unwrap_or_default();
 
+        let width = self
+            .width()
+            .map(|w| format!(r#"[width={width}\textwidth]"#, width = w.max(1.0)))
+            .unwrap_or_default();
+
         format!(
-            r##"\begin{{figure}}[ht]\centering\includegraphics{{{src}}}{caption}{id}\end{{figure}}
+            r##"\begin{{figure}}[ht]\centering\includegraphics[{width}]{{{src}}}{caption}{id}\end{{figure}}
 "##,
             src = self.src(),
         )
