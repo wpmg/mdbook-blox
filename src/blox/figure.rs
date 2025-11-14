@@ -96,8 +96,8 @@ impl Figure {
 
         Ok(())
     }
-    pub fn set_path(&mut self, path: Option<&PathBuf>) -> Option<()> {
-        self.path = path?.clone();
+    pub fn set_path(&mut self, path: &PathBuf) -> Option<()> {
+        self.path = path.clone();
         Some(())
     }
 
@@ -107,7 +107,7 @@ impl Figure {
         fig.src = src;
 
         if fig.src.is_empty() {
-            log::error!("blox-figure is missing src");
+            tracing::error!("blox-figure is missing src");
         }
 
         fig

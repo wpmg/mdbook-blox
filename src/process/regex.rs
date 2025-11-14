@@ -56,7 +56,7 @@ impl<'a> HandlebarCapture<'a> {
             refs,
             label,
         } = self;
-        log::error!("{{{{ {keyword}-{refs}: {label} }}}}: {err}",);
+        tracing::error!("{{{{ {keyword}-{refs}: {label} }}}}: {err}",);
         format!("**{{{{ {keyword}-{refs}: {label}: {err} }}}}**",)
     }
 }

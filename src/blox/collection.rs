@@ -6,24 +6,36 @@ use crate::blox::leaf::content_to_leafs_excl_reference;
 use crate::config::FIGURE_BLOCK_KEYWORD;
 use crate::config::processor_config::Config;
 use crate::render::Render;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
+use mdbook_preprocessor::book::Chapter;
 use std::borrow::{Borrow, BorrowMut, Cow};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::slice::Iter;
 use uuid::Uuid;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Collection<'a> {
-    bloxes: BloxCollection<'a>,
-    texts: TextCollection<'a>,
+    config: &'a Config,
+    bloxes: BloxCollection,
+    texts: TextCollection,
     figures: FigureCollection,
     order: OrderCollection,
 }
 
 impl<'a> Collection<'a> {
+    pub fn new(config: &'a Config) -> Self {
+        Self {
+            config,
+            bloxes: BloxCollection::default(),
+            texts: TextCollection::default(),
+            figures: FigureCollection::default(),
+            order: OrderCollection::default(),
+        }
+    }
+
     #[inline]
-    pub fn bloxes(&self) -> &BloxCollection<'a> {
+    pub fn bloxes(&self) -> &BloxCollection {
         &self.bloxes
     }
     #[inline]
@@ -31,53 +43,53 @@ impl<'a> Collection<'a> {
         &self.figures
     }
 
-    pub fn set_blox(
-        &mut self,
-        section_id: usize,
-        number_map: &mut NumberMap,
-        path: Option<&PathBuf>,
-    ) -> Result<()> {
-        for id in self.order.blox_iter(section_id) {
-            self.bloxes.set_from_section(id, number_map, path)?;
-        }
+    pub fn process_collections(&mut self) -> Result<()> {
+        let mut number_map = NumberMap::new(self.config);
 
-        Ok(())
-    }
+        for (_, chapter) in self.order.hash_map_iter() {
+            number_map.reset(chapter.number().map(|n| n.to_string()));
 
-    pub fn process_figures(
-        &mut self,
-        config: &Config,
-        section_id: usize,
-        number_map: &mut NumberMap,
-        path: Option<&PathBuf>,
-    ) -> Result<()> {
-        for ocid in self.order.iter(section_id) {
-            let Some(content) = (match ocid.id() {
-                CollectionId::Blox(v) => self.bloxes.content_mut(v),
-                CollectionId::Text(v) => self.texts.content_mut(*v),
-            }) else {
-                continue;
-            };
+            for ocid in chapter.order().iter() {
+                //
+                // Process blox paths et c.
+                //
+                if let CollectionId::Blox(ref blox_id) = ocid.id {
+                    self.bloxes
+                        .set_from_section(blox_id, &mut number_map, chapter.path())?;
+                }
 
-            let leafs = content_to_leafs_excl_reference(FIGURE_BLOCK_KEYWORD, content)?;
+                //
+                // Process figures
+                //
+                let Some(content) = (match ocid.id() {
+                    CollectionId::Blox(v) => self.bloxes.content_mut(v),
+                    CollectionId::Text(v) => self.texts.content_mut(*v),
+                }) else {
+                    continue;
+                };
 
-            if leafs.len() == 0 || (leafs.len() == 1 && (leafs[0].is_text() || leafs[0].is_none()))
-            {
-                continue;
+                let leafs = content_to_leafs_excl_reference(FIGURE_BLOCK_KEYWORD, content)?;
+
+                if leafs.len() == 0
+                    || (leafs.len() == 1 && (leafs[0].is_text() || leafs[0].is_none()))
+                {
+                    continue;
+                }
+
+                let new_content: String = leafs
+                    .into_iter()
+                    .filter_map(|leaf| match leaf {
+                        l @ Leaf::Blox { .. } => self
+                            .figures
+                            .push_leaf(l, self.config, &mut number_map, chapter.path())
+                            .ok(),
+                        Leaf::Text { content, .. } => Some(content.to_string()),
+                        _ => None,
+                    })
+                    .collect();
+
+                *content = new_content;
             }
-
-            let new_content: String = leafs
-                .into_iter()
-                .filter_map(|leaf| match leaf {
-                    l @ Leaf::Blox { .. } => {
-                        self.figures.push_leaf(l, config, number_map, path).ok()
-                    }
-                    Leaf::Text { content, .. } => Some(content.to_string()),
-                    _ => None,
-                })
-                .collect();
-
-            *content = Cow::Owned(new_content);
         }
 
         Ok(())
@@ -86,8 +98,8 @@ impl<'a> Collection<'a> {
     // CONSTRUCTION
     pub fn push_raw_leaf(
         &mut self,
-        leaf: Leaf<'a>,
-        section_id: usize,
+        leaf: Leaf<'_>,
+        chapter: &Chapter,
         config: &Config,
     ) -> Result<()> {
         let ocid_opt: Option<OrderedCollectionId> = match leaf {
@@ -115,16 +127,16 @@ impl<'a> Collection<'a> {
             _ => None,
         };
 
-        self.order.push(section_id, ocid_opt)
+        self.order.push(chapter, ocid_opt)
     }
 
     // RENDER
-    pub fn section_to_string(&self, config: &Config, section_id: usize) -> String {
+    pub fn section_to_string(&self, path_str: &str) -> String {
         let new_content: String = self
             .order
-            .iter(section_id)
+            .iter(path_str)
             .map(|ocid| match ocid.id() {
-                CollectionId::Blox(v) => self.bloxes.render(v, config),
+                CollectionId::Blox(v) => self.bloxes.render(v, self.config),
                 CollectionId::Text(v) => self.texts.to_string(*v),
             })
             .collect();
@@ -134,14 +146,14 @@ impl<'a> Collection<'a> {
 }
 
 #[derive(Default, Debug)]
-pub struct BloxCollection<'a>(HashMap<String, Blox<'a>>);
-impl<'a> BloxCollection<'a> {
+pub struct BloxCollection(HashMap<String, Blox>);
+impl BloxCollection {
     #[inline]
-    pub fn get(&self, id: &str) -> Option<&Blox<'a>> {
+    pub fn get(&self, id: &str) -> Option<&Blox> {
         self.0.get(id)
     }
     #[inline]
-    fn get_mut(&mut self, id: &str) -> Option<&mut Blox<'a>> {
+    fn get_mut(&mut self, id: &str) -> Option<&mut Blox> {
         self.0.get_mut(id)
     }
     // #[inline]
@@ -149,7 +161,7 @@ impl<'a> BloxCollection<'a> {
     //     self.get(id).map(|b| b.content())
     // }
     #[inline]
-    fn content_mut(&mut self, id: &str) -> Option<&mut Cow<'a, str>> {
+    fn content_mut(&mut self, id: &str) -> Option<&mut String> {
         self.get_mut(id).map(|b| b.content_mut())
     }
     #[inline]
@@ -162,14 +174,14 @@ impl<'a> BloxCollection<'a> {
             .unwrap_or_default()
     }
 
-    fn push(&mut self, blox: Blox<'a>) -> CollectionId {
+    fn push(&mut self, blox: Blox) -> CollectionId {
         let label = blox
             .label()
             .map(|s| s.to_string())
             .unwrap_or_else(|| Uuid::new_v4().hyphenated().to_string());
 
         if self.0.insert(label.clone(), blox).is_some() {
-            log::error!("Blox labels collision: {label}");
+            tracing::error!("Blox labels collision: {label}");
         }
 
         CollectionId::Blox(label)
@@ -179,7 +191,7 @@ impl<'a> BloxCollection<'a> {
         &mut self,
         id: &str,
         number_map: &mut NumberMap,
-        path: Option<&PathBuf>,
+        path: &PathBuf,
     ) -> Result<()> {
         let blox = self
             .get_mut(id)
@@ -191,14 +203,14 @@ impl<'a> BloxCollection<'a> {
 }
 
 #[derive(Default, Debug)]
-pub struct TextCollection<'a>(Vec<Cow<'a, str>>);
-impl<'a> TextCollection<'a> {
+pub struct TextCollection(Vec<String>);
+impl TextCollection {
     #[inline]
     fn content(&self, id: usize) -> Option<&str> {
         self.0.get(id).map(|t| t.borrow())
     }
     #[inline]
-    fn content_mut(&mut self, id: usize) -> Option<&mut Cow<'a, str>> {
+    fn content_mut(&mut self, id: usize) -> Option<&mut String> {
         self.0.get_mut(id).map(|t| t.borrow_mut())
     }
     #[inline]
@@ -206,8 +218,8 @@ impl<'a> TextCollection<'a> {
         self.content(id).map(|t| t.to_string()).unwrap_or_default()
     }
 
-    fn push(&mut self, text: Cow<'a, str>) -> CollectionId {
-        self.0.push(text);
+    fn push(&mut self, text: Cow<'_, str>) -> CollectionId {
+        self.0.push(text.to_string());
         CollectionId::Text(self.0.len() - 1)
     }
 }
@@ -241,7 +253,7 @@ impl FigureCollection {
         leaf: Leaf,
         config: &Config,
         number_map: &mut NumberMap,
-        path: Option<&PathBuf>,
+        path: &PathBuf,
     ) -> Result<String> {
         let mut fig = Figure::from_leaf(leaf, config)?;
 
@@ -261,43 +273,94 @@ impl FigureCollection {
 }
 
 #[derive(Default, Debug)]
-pub struct OrderCollection(HashMap<usize, Vec<OrderedCollectionId>>);
+/// path // info combo
+pub struct OrderCollection(HashMap<String, ChapterInfo>);
 impl OrderCollection {
     #[inline]
-    pub fn get(&self, section_id: usize) -> Option<&Vec<OrderedCollectionId>> {
-        self.0.get(&section_id)
+    pub fn hash_map_iter(&self) -> impl Iterator<Item = (&String, &ChapterInfo)> {
+        self.0.iter()
     }
     #[inline]
-    pub fn iter(&self, section_id: usize) -> Iter<'_, OrderedCollectionId> {
+    pub fn get(&self, path_str: &str) -> Option<&Vec<OrderedCollectionId>> {
+        self.0.get(path_str).map(|ci| ci.order())
+    }
+    #[inline]
+    pub fn iter(&self, path_str: &str) -> Iter<'_, OrderedCollectionId> {
         self.0
-            .get(&section_id)
-            .map(|v| v.iter())
+            .get(path_str)
+            .map(|v| v.order().iter())
             .unwrap_or_default()
     }
     #[inline]
-    pub fn blox_iter(&self, section_id: usize) -> impl Iterator<Item = &str> {
-        self.0
-            .get(&section_id)
-            .map(|v| v.iter())
-            .unwrap_or_default()
-            .filter_map(|ocid| match ocid.id {
-                CollectionId::Blox(ref v) => Some(v.as_str()),
-                _ => None,
-            })
+    pub fn blox_iter(&self, path_str: &str) -> impl Iterator<Item = &str> {
+        self.iter(path_str).filter_map(|ocid| match ocid.id {
+            CollectionId::Blox(ref v) => Some(v.as_str()),
+            _ => None,
+        })
     }
 
-    fn push(&mut self, section_id: usize, ocid: Option<OrderedCollectionId>) -> Result<()> {
+    fn push(&mut self, chapter: &Chapter, ocid: Option<OrderedCollectionId>) -> Result<()> {
         let Some(v) = ocid else {
             return Ok(());
         };
 
-        if let Some(arr) = self.0.get_mut(&section_id) {
-            arr.push(v);
+        let path_str = ChapterInfo::path_to_str(chapter)?;
+
+        if let Some(arr) = self.0.get_mut(path_str) {
+            arr.order_mut().push(v);
         } else {
-            self.0.insert(section_id, vec![v]);
+            self.0
+                .insert(path_str.to_string(), ChapterInfo::new(chapter, v)?);
         }
 
         Ok(())
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ChapterInfo {
+    order: Vec<OrderedCollectionId>,
+    number: Option<String>,
+    path: PathBuf,
+}
+
+impl ChapterInfo {
+    #[inline]
+    pub fn new(chapter: &Chapter, ocid: OrderedCollectionId) -> Result<Self> {
+        let Some(path) = chapter.path.clone() else {
+            bail!("Chapter does not have path");
+        };
+
+        Ok(Self {
+            order: vec![ocid],
+            number: chapter.number.as_ref().map(|n| n.to_string()),
+            path,
+        })
+    }
+    #[inline]
+    pub fn order(&self) -> &Vec<OrderedCollectionId> {
+        &self.order
+    }
+    #[inline]
+    pub fn order_mut(&mut self) -> &mut Vec<OrderedCollectionId> {
+        &mut self.order
+    }
+    #[inline]
+    pub fn number(&self) -> Option<&str> {
+        self.number.as_deref()
+    }
+    #[inline]
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    #[inline]
+    pub fn path_to_str<'a>(chapter: &'a Chapter) -> Result<&'a str> {
+        chapter
+            .path
+            .as_ref()
+            .and_then(|p| p.to_str())
+            .context("Chapter does not have a valid unicode path")
     }
 }
 

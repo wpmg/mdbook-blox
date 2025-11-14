@@ -2,23 +2,25 @@
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
 use mdbook_blox::{BloxPreProcessor, Config};
+use mdbook_preprocessor::{MDBOOK_VERSION, Preprocessor, parse_input};
 use semver::{Version, VersionReq};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::process;
+use tracing::debug_span;
+use tracing::{debug, info};
 
 /// mdbook preprocessor to add support for admonition-like blocks
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Check whether a renderer is supported by this preprocessor
     Supports { renderer: String },
@@ -30,13 +32,22 @@ enum Commands {
 }
 
 fn main() {
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    let filter = tracing_subscriber::EnvFilter::builder()
+        .with_env_var("MDBOOK_LOG")
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+        .with_writer(std::io::stderr)
+        .with_env_filter(filter)
+        .init();
 
     let cli = Cli::parse();
     if let Err(error) = run(cli) {
-        log::error!("Fatal error: {}", error);
+        tracing::error!("Fatal error: {}", error);
         for error in error.chain() {
-            log::error!("  - {}", error);
+            tracing::error!("  - {}", error);
         }
         process::exit(1);
     }
@@ -53,18 +64,17 @@ fn run(cli: Cli) -> Result<()> {
 }
 
 fn handle_preprocessing() -> Result<()> {
-    log::debug!("Start preprocessing blox");
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
+    let (ctx, book) = parse_input(io::stdin())?;
 
     let book_version = Version::parse(&ctx.mdbook_version)?;
-    let version_req = VersionReq::parse(mdbook::MDBOOK_VERSION)?;
+    let version_req = VersionReq::parse(MDBOOK_VERSION)?;
 
     if !version_req.matches(&book_version) {
         eprintln!(
             "Warning: The {} plugin was built against version {} of mdbook,\
              but we're being called from version {}",
-            mdbook_blox::PREPROCESSOR_NAME,
-            mdbook::MDBOOK_VERSION,
+            BloxPreProcessor.name(),
+            MDBOOK_VERSION,
             ctx.mdbook_version
         );
     }
@@ -76,23 +86,32 @@ fn handle_preprocessing() -> Result<()> {
 }
 
 fn handle_supports(renderer: String) -> ! {
-    if BloxPreProcessor.supports_renderer(&renderer) {
+    let supported = BloxPreProcessor
+        .supports_renderer(&renderer)
+        .unwrap_or(false);
+
+    if supported {
+        debug!("blox supports {}", &renderer);
         process::exit(0);
     } else {
+        info!("blox does not support {}", &renderer);
         process::exit(1);
     }
 }
 
 fn handle_css(dir: PathBuf) -> anyhow::Result<()> {
     let book_toml = dir.join("book.toml");
-    log::info!("Reading configuration file '{}'", book_toml.display());
 
+    let span = debug_span!("config").entered();
     let config = Config::from_file(&book_toml)?;
-    let css = config.css().css_string(&config);
+    span.exit();
 
+    let span = debug_span!("writing css").entered();
+    let css = config.css().css_string(&config);
     let output = dir.join(config.css().file());
-    log::info!("Writing custom CSS file '{}'", output.display());
+    debug!("Writing CSS file to '{}'", output.display());
     fs::write(output, css)?;
+    span.exit();
 
     Ok(())
 }

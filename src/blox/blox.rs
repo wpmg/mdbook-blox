@@ -7,13 +7,12 @@ use crate::render::Render;
 use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
 use serde::Deserialize;
-use std::borrow::Cow;
 use std::path::PathBuf;
 
 #[derive(Eq, PartialEq, Debug, Default)]
-pub struct Blox<'a> {
+pub struct Blox {
     environment: String,
-    content: Cow<'a, str>,
+    content: String,
     label: Option<BloxLabel>,
 
     title: String,
@@ -24,7 +23,7 @@ pub struct Blox<'a> {
     title_type: BloxConfigTitleType,
 }
 
-impl<'a> Blox<'a> {
+impl Blox {
     // GETTERS
     #[inline]
     pub fn env(&self) -> &str {
@@ -32,10 +31,10 @@ impl<'a> Blox<'a> {
     }
     #[inline]
     pub fn content(&self) -> &str {
-        self.content.as_ref()
+        self.content.as_str()
     }
     #[inline]
-    pub fn content_mut(&mut self) -> &mut Cow<'a, str> {
+    pub fn content_mut(&mut self) -> &mut String {
         &mut self.content
     }
     #[inline]
@@ -85,9 +84,9 @@ impl<'a> Blox<'a> {
 
         Ok(())
     }
-    pub fn set_path(&mut self, path: Option<&PathBuf>) -> Option<()> {
+    pub fn set_path(&mut self, path: &PathBuf) -> Option<()> {
         let label = self.label.as_mut()?;
-        label.path = path?.clone();
+        label.path = path.clone();
         Some(())
     }
 
@@ -113,7 +112,7 @@ impl<'a> Blox<'a> {
             BloxConfigTitleType::Titled => self.ref_title_scoped(config),
             BloxConfigTitleType::Numbered => self.ref_number(config),
             _ => {
-                log::warn!("Reference (default) cannot be created");
+                tracing::warn!("Reference (default) cannot be created");
                 "??".to_string()
             }
         }
@@ -122,7 +121,7 @@ impl<'a> Blox<'a> {
         match self.header(config) {
             Some(s) => s,
             _ => {
-                log::warn!("Reference (full) cannot be created");
+                tracing::warn!("Reference (full) cannot be created");
                 "??".to_string()
             }
         }
@@ -135,7 +134,7 @@ impl<'a> Blox<'a> {
                 num = self.number,
             ),
             _ => {
-                log::warn!("Numbered title cannot be created");
+                tracing::warn!("Numbered title cannot be created");
                 "??".to_string()
             }
         }
@@ -144,7 +143,7 @@ impl<'a> Blox<'a> {
         match self.title_type {
             BloxConfigTitleType::Numbered => self.number.clone(),
             _ => {
-                log::warn!("Numbered title cannot be created");
+                tracing::warn!("Numbered title cannot be created");
                 "??".to_string()
             }
         }
@@ -155,7 +154,7 @@ impl<'a> Blox<'a> {
             | BloxConfigTitleType::Titled
             | BloxConfigTitleType::Numbered => self.title.clone(),
             _ => {
-                log::warn!("Reference (title) cannot be created");
+                tracing::warn!("Reference (title) cannot be created");
                 "??".to_string()
             }
         }
@@ -170,7 +169,7 @@ impl<'a> Blox<'a> {
                 title = self.title
             ),
             _ => {
-                log::warn!("Reference (title scoped) cannot be created");
+                tracing::warn!("Reference (title scoped) cannot be created");
                 "??".to_string()
             }
         }
@@ -182,12 +181,12 @@ impl<'a> Blox<'a> {
     }
 
     // CONSTRUCTORS
-    pub fn from_leaf(leaf: Leaf<'a>, config: &Config) -> Result<Self> {
+    pub fn from_leaf(leaf: Leaf<'_>, config: &Config) -> Result<Self> {
         let Leaf::Blox {
             options, content, ..
         } = leaf
         else {
-            bail!("Can only construct Blox from RawLeaf::Blox");
+            bail!("Can only construct Blox from Leaf::Blox");
         };
 
         let re = Regex::new(&format!("(?P<env>{TASCII_MATCH}+)[[:space:]]*(?P<opts>.*)"))
@@ -211,7 +210,7 @@ impl<'a> Blox<'a> {
 
         let mut blox = Blox::default();
         blox.environment = env.to_string();
-        blox.content = content;
+        blox.content = content.to_string();
         blox.label = BloxLabel::from_header(&blox_header);
 
         blox.title = blox_header.title;
@@ -224,12 +223,12 @@ impl<'a> Blox<'a> {
         match blox.title_type {
             BloxConfigTitleType::Minimal => {
                 if !blox.title.is_empty() {
-                    log::warn!("Title will be ignored for title_type 'minimal'");
+                    tracing::warn!("Title will be ignored for title_type 'minimal'");
                 }
             }
             BloxConfigTitleType::Unscoped | BloxConfigTitleType::Titled => {
                 if blox.title.is_empty() {
-                    log::error!("Title is not provided for a titled title_type");
+                    tracing::error!("Title is not provided for a titled title_type");
                 }
             }
             _ => {}
@@ -239,7 +238,7 @@ impl<'a> Blox<'a> {
     }
 }
 
-impl<'a> Render for Blox<'a> {
+impl Render for Blox {
     fn html(&self, config: &Config) -> String {
         let header = self
             .header(config)
@@ -327,7 +326,7 @@ impl BloxLabel {
     fn from_header(header: &BloxHeader) -> Option<Self> {
         if header.label.is_empty() {
             if header.defer_rendering {
-                log::error!("Cannot defer rendering of a blox without a label");
+                tracing::error!("Cannot defer rendering of a blox without a label");
             }
 
             return None;
@@ -362,6 +361,7 @@ mod test {
         blox_config::BloxConfigTitleType, processor_config::test::default_test_config,
     };
     use pretty_assertions::assert_eq;
+    use std::borrow::Cow;
 
     const CONTENT_STR: &'static str = "CONTENT";
 
@@ -382,10 +382,10 @@ mod test {
         Ok(())
     }
 
-    fn with_environment<'a>(env: &'a str, tt: BloxConfigTitleType) -> Blox<'a> {
+    fn with_environment(env: &str, tt: BloxConfigTitleType) -> Blox {
         let mut blox = Blox::default();
         blox.environment = env.to_string();
-        blox.content = Cow::Borrowed(CONTENT_STR);
+        blox.content = CONTENT_STR.to_string();
         blox.title_type = tt;
         blox
     }

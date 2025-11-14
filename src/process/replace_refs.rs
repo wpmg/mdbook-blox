@@ -10,14 +10,14 @@ pub fn replace_refs(
     collection: &Collection,
     content: String,
     config: &Config,
-    path: Option<&PathBuf>,
+    path: &PathBuf,
 ) -> Result<String> {
     let regex = regex_handlebars("blox(fig)?", "[ltnfTNF]?ref")?;
 
     let new_content = regex
         .replace_all(&content, |caps: &Captures| {
             let Some(refs) = HandlebarCapture::from_captures(caps) else {
-                log::error!("Could not match handlebar");
+                tracing::error!("Could not match handlebar");
                 return HandlebarCapture::error("could not match");
             };
 
@@ -36,7 +36,7 @@ fn replace_blox_ref(
     refs: HandlebarCapture,
     collection: &Collection,
     config: &Config,
-    path: Option<&PathBuf>,
+    path: &PathBuf,
 ) -> String {
     let Some(blox) = collection.bloxes().get(refs.label) else {
         return refs.to_error("blox not defined");
@@ -58,10 +58,7 @@ fn replace_blox_ref(
         _ => (),
     };
 
-    let Some(path) = path.map(|p| relative_path_to_obj(p, blox_label.path(), blox.id(config)))
-    else {
-        return refs.to_error("chapter without path");
-    };
+    let path = relative_path_to_obj(path, blox_label.path(), blox.id(config));
 
     match ref_opts {
         // Give link
@@ -77,11 +74,7 @@ fn replace_blox_ref(
     }
 }
 
-fn replace_figure_ref(
-    refs: HandlebarCapture,
-    collection: &Collection,
-    path: Option<&PathBuf>,
-) -> String {
+fn replace_figure_ref(refs: HandlebarCapture, collection: &Collection, path: &PathBuf) -> String {
     let Some(figure) = collection.figures().get(refs.label) else {
         return refs.to_error("figure not defined");
     };
@@ -96,9 +89,7 @@ fn replace_figure_ref(
         _ => (),
     };
 
-    let Some(path) = path.map(|p| relative_path_to_obj(p, figure.path(), figure.id())) else {
-        return refs.to_error("chapter without path");
-    };
+    let path = relative_path_to_obj(path, figure.path(), figure.id());
 
     match ref_opts {
         // Give link

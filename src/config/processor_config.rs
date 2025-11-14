@@ -4,7 +4,7 @@ use super::figure_config::FigureConfig;
 use super::{CODE_BLOCK_KEYWORD, PREPROCESSOR_NAME};
 use anyhow::{Context, Result};
 use hex_color::HexColor;
-use mdbook::preprocess::PreprocessorContext;
+use mdbook_preprocessor::PreprocessorContext;
 use serde::Deserialize;
 use std::collections::hash_map::{HashMap, Keys};
 use std::fs;
@@ -42,7 +42,7 @@ impl Config {
     #[inline]
     pub fn get_env(&self, env: &str) -> Option<&BloxConfig> {
         self.environments.get(env).or_else(|| {
-            log::error!("Environment not found: {env}");
+            tracing::error!("Environment not found: {env}");
             None
         })
     }
@@ -84,7 +84,7 @@ impl Config {
     // ADDITIONAL GETTERS
     pub fn id(&self, env: &str) -> String {
         if !self.environments.contains_key(env) {
-            log::error!("Environment not found: {env}");
+            tracing::error!("Environment not found: {env}");
         }
 
         format!("{CODE_BLOCK_KEYWORD}-{env}")
@@ -98,12 +98,19 @@ impl Config {
         MdbookConfig::from_string(config).map(|c| c.preprocessor.blox)
     }
     pub fn from_context(ctx: &PreprocessorContext) -> Result<Self> {
-        let table = ctx
+        let table_key = format!("preprocessor.{PREPROCESSOR_NAME}");
+
+        let Some(table) = ctx
             .config
-            .get_preprocessor(PREPROCESSOR_NAME)
-            .context("No configuration in book.toml")?;
-        let value = toml::Value::Table(table.clone());
-        let mut config: Self = Self::deserialize(value)?;
+            .get::<toml::Value>(&table_key)
+            .context("book.toml failed to deserialize")?
+        else {
+            return Ok(Self::default());
+        };
+
+        // let value = toml::Value::Table(table.clone());
+        // let mut config: Self = Self::deserialize(value)?;
+        let mut config = Self::deserialize(table)?;
         config.renderer = ctx.renderer.clone();
         Ok(config)
     }

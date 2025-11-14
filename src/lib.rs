@@ -4,14 +4,15 @@ mod parse;
 mod process;
 mod render;
 
-pub use crate::config::PREPROCESSOR_NAME;
+use crate::config::PREPROCESSOR_NAME;
 pub use crate::config::processor_config::Config;
 use anyhow::Result;
-use mdbook::book::Book;
-use mdbook::preprocess::{Preprocessor, PreprocessorContext};
-use process::{BloxProcessor, book_filter_iter_mut};
+use mdbook_preprocessor::book::Book;
+use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
+use process::process;
+use tracing::debug_span;
 
-/// A no-op preprocessor.
+/// A blox preprocessor
 pub struct BloxPreProcessor;
 
 impl BloxPreProcessor {
@@ -26,21 +27,22 @@ impl Preprocessor for BloxPreProcessor {
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
+        let span = debug_span!("config").entered();
         let config = Config::from_context(ctx)?;
-        let mut new_content = BloxProcessor::process(&mut book, &config)?;
+        span.exit();
 
-        for (sec_id, chapter) in book_filter_iter_mut(&mut book) {
-            let Some(content) = new_content.remove(&sec_id) else {
-                continue;
-            };
-            chapter.content = content;
-        }
+        let span = debug_span!("processing").entered();
+        process(&mut book, &config)?;
+        span.exit();
 
         Ok(book)
     }
 
-    fn supports_renderer(&self, renderer: &str) -> bool {
-        renderer != "not-supported"
+    fn supports_renderer(&self, renderer: &str) -> Result<bool> {
+        match renderer {
+            "html" | "latex" => Ok(true),
+            _ => Ok(false),
+        }
     }
 }
 
