@@ -5,6 +5,8 @@ edition = "2024"
 license = "MIT"
 keywords = ["mdbook", "markdown"]
 repository = "https://github.com/wpmg/mdbook-blox"
+authors = ["Wilmer Prentius <wilmer.prentius@slu.se>"]
+description = "A preprocessor for mdbook to add figures and admonishment-like blox"
 
 [dependencies]
 anyhow = "1.0.100"
