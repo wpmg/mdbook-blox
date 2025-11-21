@@ -51,17 +51,11 @@ impl<'a> Leaf<'a> {
     }
     #[inline]
     pub fn is_none(&self) -> bool {
-        match self {
-            Self::None => true,
-            _ => false,
-        }
+        matches!(self, Self::None)
     }
     #[inline]
     pub fn is_text(&self) -> bool {
-        match self {
-            Self::Text { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Text { .. })
     }
 
     #[inline]

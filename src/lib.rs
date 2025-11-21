@@ -1,5 +1,5 @@
-pub mod blox;
 pub mod config;
+pub mod models;
 mod parse;
 mod process;
 mod render;
@@ -13,6 +13,7 @@ use process::process;
 use tracing::debug_span;
 
 /// A blox preprocessor
+#[derive(Default)]
 pub struct BloxPreProcessor;
 
 impl BloxPreProcessor {

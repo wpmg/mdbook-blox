@@ -16,11 +16,11 @@ impl Default for CssConfig {
     fn default() -> Self {
         Self {
             file_path: format!("assets/{PREPROCESSOR_NAME}.css"),
-            block: format!("{CODE_BLOCK_KEYWORD}"),
+            block: CODE_BLOCK_KEYWORD.to_string(),
             header: format!("{CODE_BLOCK_KEYWORD}-header"),
             content: format!("{CODE_BLOCK_KEYWORD}-content"),
             footer: format!("{CODE_BLOCK_KEYWORD}-footer"),
-            figure: format!("{FIGURE_BLOCK_KEYWORD}"),
+            figure: FIGURE_BLOCK_KEYWORD.to_string(),
         }
     }
 }

@@ -7,7 +7,7 @@ use crate::render::Render;
 use anyhow::{Context, Result, anyhow, bail};
 use regex::Regex;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Eq, PartialEq, Debug, Default)]
 pub struct Blox {
@@ -84,9 +84,9 @@ impl Blox {
 
         Ok(())
     }
-    pub fn set_path(&mut self, path: &PathBuf) -> Option<()> {
+    pub fn set_path(&mut self, path: &Path) -> Option<()> {
         let label = self.label.as_mut()?;
-        label.path = path.clone();
+        label.path = path.to_path_buf();
         Some(())
     }
 
@@ -130,7 +130,7 @@ impl Blox {
         match self.title_type {
             BloxConfigTitleType::Numbered => format!(
                 "{env} {num}",
-                env = config.env_name(&self.env()).to_string(),
+                env = config.env_name(self.env()),
                 num = self.number,
             ),
             _ => {
@@ -165,7 +165,7 @@ impl Blox {
             | BloxConfigTitleType::Titled
             | BloxConfigTitleType::Numbered => format!(
                 "{env}: {title}",
-                env = config.env_name(&self.env()).to_string(),
+                env = config.env_name(self.env()),
                 title = self.title
             ),
             _ => {
@@ -208,17 +208,20 @@ impl Blox {
             })
             .unwrap_or_else(|| Ok(BloxHeader::default()))?;
 
-        let mut blox = Blox::default();
-        blox.environment = env.to_string();
-        blox.content = content.to_string();
-        blox.label = BloxLabel::from_header(&blox_header);
+        let blox = Blox {
+            environment: env.to_string(),
+            content: content.to_string(),
+            label: BloxLabel::from_header(&blox_header),
 
-        blox.title = blox_header.title;
-        blox.footer = blox_header.footer;
+            title: blox_header.title,
+            footer: blox_header.footer,
 
-        blox.title_type = blox_header
-            .title_type
-            .unwrap_or_else(|| config.env_title_type(env).clone());
+            title_type: blox_header
+                .title_type
+                .unwrap_or_else(|| config.env_title_type(env)),
+
+            ..Blox::default()
+        };
 
         match blox.title_type {
             BloxConfigTitleType::Minimal => {
@@ -318,9 +321,10 @@ impl BloxLabel {
 
     // CONSTRUCTORS
     fn with_label(label: &str) -> Self {
-        let mut bl = Self::default();
-        bl.label = to_toml_ascii(label);
-        bl
+        Self {
+            label: to_toml_ascii(label),
+            ..Self::default()
+        }
     }
 
     fn from_header(header: &BloxHeader) -> Option<Self> {

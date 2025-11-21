@@ -1,8 +1,7 @@
 use super::blox::Blox;
 use super::figure::Figure;
-use super::leaf::Leaf;
+use super::leaf::{Leaf, content_to_leafs_excl_reference};
 use super::number_map::NumberMap;
-use crate::blox::leaf::content_to_leafs_excl_reference;
 use crate::config::FIGURE_BLOCK_KEYWORD;
 use crate::config::processor_config::Config;
 use crate::render::Render;
@@ -10,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use mdbook_preprocessor::book::Chapter;
 use std::borrow::{Borrow, BorrowMut, Cow};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::slice::Iter;
 use uuid::Uuid;
 
@@ -70,7 +69,7 @@ impl<'a> Collection<'a> {
 
                 let leafs = content_to_leafs_excl_reference(FIGURE_BLOCK_KEYWORD, content)?;
 
-                if leafs.len() == 0
+                if leafs.is_empty()
                     || (leafs.len() == 1 && (leafs[0].is_text() || leafs[0].is_none()))
                 {
                     continue;
@@ -191,7 +190,7 @@ impl BloxCollection {
         &mut self,
         id: &str,
         number_map: &mut NumberMap,
-        path: &PathBuf,
+        path: &Path,
     ) -> Result<()> {
         let blox = self
             .get_mut(id)
@@ -253,7 +252,7 @@ impl FigureCollection {
         leaf: Leaf,
         config: &Config,
         number_map: &mut NumberMap,
-        path: &PathBuf,
+        path: &Path,
     ) -> Result<String> {
         let mut fig = Figure::from_leaf(leaf, config)?;
 
@@ -355,7 +354,7 @@ impl ChapterInfo {
     }
 
     #[inline]
-    pub fn path_to_str<'a>(chapter: &'a Chapter) -> Result<&'a str> {
+    pub fn path_to_str(chapter: &Chapter) -> Result<&str> {
         chapter
             .path
             .as_ref()
@@ -389,10 +388,7 @@ impl OrderedCollectionId {
 
     #[inline]
     pub fn is_blox(&self) -> bool {
-        match self.id {
-            CollectionId::Blox(_) => true,
-            _ => false,
-        }
+        matches!(self.id, CollectionId::Blox(_))
     }
 
     // CONSTRUCTORS

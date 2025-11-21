@@ -4,13 +4,13 @@ use crate::parse::sanitize_string_toml_ascii;
 use crate::render::Render;
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::leaf::Leaf;
 
 // Figure: only to store labelled figures for ref. matching.
 // Numbering as-we-go on parse.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Figure {
     src: String,
     label: String,
@@ -20,20 +20,6 @@ pub struct Figure {
     content: String,
     path: PathBuf,
     number: Option<String>,
-}
-
-impl Default for Figure {
-    fn default() -> Self {
-        Self {
-            src: String::default(),
-            label: String::default(),
-            alt: String::default(),
-            width: None,
-            content: String::default(),
-            path: PathBuf::default(),
-            number: None,
-        }
-    }
 }
 
 impl Figure {
@@ -96,21 +82,21 @@ impl Figure {
 
         Ok(())
     }
-    pub fn set_path(&mut self, path: &PathBuf) -> Option<()> {
-        self.path = path.clone();
+    pub fn set_path(&mut self, path: &Path) -> Option<()> {
+        self.path = path.to_path_buf();
         Some(())
     }
 
     // CONSTRUCTOR
     fn with_src(src: String) -> Self {
-        let mut fig = Self::default();
-        fig.src = src;
-
-        if fig.src.is_empty() {
+        if src.is_empty() {
             tracing::error!("blox-figure is missing src");
         }
 
-        fig
+        Self {
+            src,
+            ..Self::default()
+        }
     }
 
     pub fn from_leaf(leaf: Leaf<'_>, config: &Config) -> Result<Self> {
@@ -164,9 +150,11 @@ impl Render for Figure {
             );
         }
 
-        let alt = (!self.alt().is_empty())
-            .then(|| format!(r#"alt="{alt}""#, alt = self.alt()))
-            .unwrap_or_default();
+        let alt = if self.alt().is_empty() {
+            String::new()
+        } else {
+            format!(r#"alt="{alt}""#, alt = self.alt())
+        };
 
         let width = self
             .width()
@@ -185,17 +173,18 @@ impl Render for Figure {
         let id = self
             .id()
             .map(|s| format!(r#"\label{{{s}}}"#))
-            .unwrap_or(String::new());
-        let caption = (!self.content().trim().is_empty())
-            .then(|| {
-                format!(
-                    r##"\caption{{%
+            .unwrap_or_default();
+
+        let caption = if self.content().trim().is_empty() {
+            String::new()
+        } else {
+            format!(
+                r##"\caption{{%
 {content}
 }}"##,
-                    content = self.content()
-                )
-            })
-            .unwrap_or_default();
+                content = self.content()
+            )
+        };
 
         let width = self
             .width()

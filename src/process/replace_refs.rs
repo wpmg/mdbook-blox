@@ -1,6 +1,6 @@
 use super::regex::{HandlebarCapture, regex_handlebars};
-use crate::blox::collection::Collection;
 use crate::config::processor_config::Config;
+use crate::models::collection::Collection;
 use anyhow::Result;
 use pathdiff::diff_paths;
 use regex::Captures;

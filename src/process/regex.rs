@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 pub use regex::*;
 
 /// TOML ASCII
-pub const TASCII_MATCH: &'static str = "[[:alnum:]_-]";
+pub const TASCII_MATCH: &str = "[[:alnum:]_-]";
 
 // Captures ::: keyword re
 pub fn regex_header(keyword: &str, re: &str, fence_len: usize) -> Result<Regex> {

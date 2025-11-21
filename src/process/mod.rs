@@ -1,10 +1,10 @@
 pub mod regex;
 mod replace_refs;
 
-use crate::blox::collection::Collection;
-use crate::blox::leaf::content_to_leafs;
 use crate::config::CODE_BLOCK_KEYWORD;
 use crate::config::processor_config::Config;
+use crate::models::collection::Collection;
+use crate::models::leaf::content_to_leafs;
 use anyhow::Result;
 use mdbook_preprocessor::book::Book;
 use replace_refs::replace_refs;
